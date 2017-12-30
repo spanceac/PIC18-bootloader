@@ -324,6 +324,11 @@ StartBtld
     movlw 0x70
     iorwf OSCCON ; select 16 MHz internal oscillator
     bsf OSCTUNE, PLLEN
+    bsf TRISB, RB5
+    banksel ANSELB
+    bcf ANSELB, ANSB5
+    btfsc PORTB, RB5 ; RB5 low --> goto bootloader, RB5 high --> goto user code
+    goto user_prog_start
     lfsr FSR0, recv_line
     clrf flash_erase_addr_hi
     clrf flash_erase_addr_lo
