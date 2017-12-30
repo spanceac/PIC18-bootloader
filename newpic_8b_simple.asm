@@ -39,7 +39,7 @@ endc
   CONFIG  PRICLKEN = ON         ; Primary clock enable bit (Primary clock enabled)
   CONFIG  WDTEN = OFF
   CONFIG  IESO = OFF
-  
+
 RES_VECT  CODE    0x0000            ; processor reset vector
     GOTO    StartBtld                   ; go to beginning of program
 
@@ -263,7 +263,7 @@ repeat_buf_fill
     TBLWT*+
     decfsz count2
     goto repeat_buf_fill
-    
+    TBLRD*- ; point the TBLPTR to the last written address, otherwise crazy things happen
     ;;; start the hw flashing procedure
     bsf EECON1, EEPGD ; point to Flash memory
     bcf EECON1, CFGS ; acces Flash program memory
@@ -273,7 +273,6 @@ repeat_buf_fill
     movlw 0xaa
     movwf EECON2
     bsf EECON1, WR ; start program (CPU stall until done)
-    bcf EECON1, WR ; disable memory write
     
     ;;; addresses are 0, we need to put the goto instruction of the user program at the address 4
     movlw jmp_to_user_code_addr_hi
@@ -296,7 +295,7 @@ fill_holding_regs
     TBLWT*+ ; put data in holding register and increment the table
     decf data_bytes_nr
     bnz fill_holding_regs
-    
+    TBLRD*- ; point the TBLPTR to the last written address, otherwise crazy things happen
     ;;; start the hw flashing procedure
     bsf EECON1, EEPGD ; point to Flash memory
     bcf EECON1, CFGS ; acces Flash program memory
@@ -306,7 +305,6 @@ fill_holding_regs
     movlw 0xaa
     movwf EECON2
     bsf EECON1, WR ; start program (CPU stall until done)
-    bcf EECON1, WR ; disable memory write
     return
 
 record_not_zero
@@ -322,16 +320,6 @@ record_is_extended
     movwf extended_rec_started
     return
 
-delay_some_time:
-    movlw 0
-repeat
-    addlw 1
-    nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop
-    nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop
-    bnz repeat
-    return
-    
-    
 StartBtld
     movlw 0x70
     iorwf OSCCON ; select 16 MHz internal oscillator
@@ -342,10 +330,8 @@ StartBtld
     clrf data_ended
     clrf count
     clrf extended_rec_started
-    call delay_some_time
-    call delay_some_time
-    call delay_some_time
-    call delay_some_time
+    btfss OSCCON2, PLLRDY ; wait for PLL to become active
+    goto $-2
     call uart_init
     
 receive_and_flash
