@@ -111,8 +111,6 @@ ascii2hex_line:
     movf count, w
     movwf local_count ; create a copy of count in local_count
 convert_next_byte
-    dcfsnz local_count, f
-    goto exit_conversion
     movlw 48
     subwf INDF0 ; subtract 48 from number
     movlw 10
@@ -124,7 +122,8 @@ continue_for_a_f
     subwf INDF0 ; subtract 7 from number
 continue_for_0_9
     movf POSTINC0, w ; increment FSR
-    goto convert_next_byte
+    decf local_count
+    bnz convert_next_byte
 exit_conversion
     return
 
