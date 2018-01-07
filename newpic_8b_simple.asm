@@ -32,6 +32,7 @@ flash_erase_addr_hi
 flash_erase_addr_lo
 first_jmp_inst_buf:4
 count2
+flash_addr_zone
 endc
     
   CONFIG  FOSC = INTIO67        ; Oscillator Selection bits (Internal oscillator block)
@@ -213,6 +214,18 @@ continue_erase
     incf flash_erase_addr_hi ; increase also the high bytes if carry from previous addition
     goto erase_flash
     
+write_flash:
+    ;;; start the hw flashing procedure
+    bsf EECON1, EEPGD ; point to Flash memory
+    bcf EECON1, CFGS ; acces Flash program memory
+    bsf EECON1, WREN ; enable write to memory
+    movlw 0x55
+    movwf EECON2
+    movlw 0xaa
+    movwf EECON2
+    bsf EECON1, WR ; start program (CPU stall until done)
+    return
+
 flash_line:
     ;;; test for recored type
     tstfsz record_type
@@ -263,15 +276,7 @@ repeat_buf_fill
     decfsz count2
     goto repeat_buf_fill
     TBLRD*- ; point the TBLPTR to the last written address, otherwise crazy things happen
-    ;;; start the hw flashing procedure
-    bsf EECON1, EEPGD ; point to Flash memory
-    bcf EECON1, CFGS ; acces Flash program memory
-    bsf EECON1, WREN ; enable write to memory
-    movlw 0x55
-    movwf EECON2
-    movlw 0xaa
-    movwf EECON2
-    bsf EECON1, WR ; start program (CPU stall until done)
+    call write_flash
     
     ;;; addresses are 0, we need to put the goto instruction of the user program at the address 4
     movlw jmp_to_user_code_addr_hi
@@ -286,25 +291,39 @@ flash_wr_buf
     movwf TBLPTRH ; load flash address high
     movf flash_addr_lo, w
     movwf TBLPTRL ; load flash address low
+    movwf flash_addr_zone
+    movlw 0xc0
+    andwf flash_addr_zone, f
 
 fill_holding_regs    
     ;;; here comes the real flashing part ... YAAAY!!!
     movf POSTINC1, w ; put byte from write buffer in w and increment buffer addr
     movwf TABLAT ; put data in write latch
     TBLWT*+ ; put data in holding register and increment the table
+
+    ; verify if bits 7:6 in TBLTPTRL changed -> address range change
+    movf TBLPTRL, w
+    andlw 0xc0
+    xorwf flash_addr_zone, w
+    bz no_addr_zone_change
+    movlw 1
+    cpfseq data_bytes_nr ; if TBLPTRL bits 7:6 changed && data_bytes_nr = 1 -> last byte -> no addr range change
+    bra addr_zone_has_change
+
+no_addr_zone_change
     decf data_bytes_nr
     bnz fill_holding_regs
     TBLRD*- ; point the TBLPTR to the last written address, otherwise crazy things happen
-    ;;; start the hw flashing procedure
-    bsf EECON1, EEPGD ; point to Flash memory
-    bcf EECON1, CFGS ; acces Flash program memory
-    bsf EECON1, WREN ; enable write to memory
-    movlw 0x55
-    movwf EECON2
-    movlw 0xaa
-    movwf EECON2
-    bsf EECON1, WR ; start program (CPU stall until done)
+    call write_flash
     return
+
+addr_zone_has_change
+    TBLRD*- ; point the TBLPTR to the last written address, otherwise crazy things happen
+    call write_flash ; flash the first part
+    decf data_bytes_nr
+    ; now flash the remaining part
+    TBLRD*+ ; increment TBLPTR to the new values
+    goto fill_holding_regs
 
 record_not_zero
     movlw 1
