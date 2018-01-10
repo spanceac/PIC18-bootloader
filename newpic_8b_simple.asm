@@ -21,7 +21,8 @@ flash_addr_hi
 flash_addr_lo
 data_bytes_nr
 data_bytes_nr_copy
-ck_sum
+ck_sum_calc
+ck_sum_from_hex
 record_type
 count
 local_count
@@ -61,14 +62,6 @@ uart_init:
     movlw 8
     movwf SPBRG1 ; 115200 baudrate
     ;;; let's make ourselves heard
-    movlw 'W'
-    movwf TXREG1
-    btfss TXSTA1, TRMT
-    goto $-2
-    movlw 'O'
-    movwf TXREG1
-    btfss TXSTA1, TRMT
-    goto $-2
     movlw 'W'
     movwf TXREG1
     btfss TXSTA1, TRMT
@@ -132,7 +125,7 @@ extract_write_data:
     clrf data_bytes_nr
     clrf flash_addr_hi
     clrf flash_addr_lo
-    clrf ck_sum
+    clrf ck_sum_calc
     clrf record_type
     
     lfsr FSR1, fl_write_buf ; point FSR1 to write buffer
@@ -145,6 +138,7 @@ extract_write_data:
     swapf data_bytes_nr
     movf POSTINC0, w ; second byte of data_bytes_nr
     iorwf data_bytes_nr
+    movff data_bytes_nr, ck_sum_calc
     
     ;;; get flash addres high and low
     movf POSTINC0, w ; first byte of flash_addr_hi
@@ -152,18 +146,22 @@ extract_write_data:
     swapf flash_addr_hi
     movf POSTINC0, w ; second byte of flash_addr_hi
     iorwf flash_addr_hi
+    movf flash_addr_hi, w
+    addwf ck_sum_calc, f
     movf POSTINC0, w ; first byte of flash_addr_lo
     movwf flash_addr_lo
     swapf flash_addr_lo
     movf POSTINC0, w ; second byte of flash_addr_lo
     iorwf flash_addr_lo
+    movf flash_addr_lo, w
+    addwf ck_sum_calc, f
     
     ;; get record type
     movf POSTINC0, w
     movf POSTINC0, w ; get record type
     movwf record_type
-    
-    ;;; checksum calculations would be good
+    movf record_type, w
+    addwf ck_sum_calc, f
 
     ;;; create a copy of data_bytes_nr, to use in copy loop
     movf data_bytes_nr, w
@@ -180,11 +178,27 @@ write_buf_fill
    
     movf temp_data_byte, w
     movwf POSTINC1 ; copy to write buffer and increment buffer address
+    addwf ck_sum_calc, f
     
     decfsz data_bytes_nr_copy ;;; repeat for all
     bra write_buf_fill
     
+    movf POSTINC0, w ; first byte of ck_sum_from_hex
+    movwf ck_sum_from_hex
+    swapf ck_sum_from_hex
+    movf POSTINC0, w ; second byte of ck_sum_from_hex
+    iorwf ck_sum_from_hex
+    movf ck_sum_from_hex, w
+    addwf ck_sum_calc
+    bnz ck_sum_err
     return
+ck_sum_err
+    ; write to UART we have checksum error and reset
+    movlw 'E'
+    movwf TXREG1
+    btfss TXSTA1, TRMT
+    goto $-2
+    reset
     
 erase_flash:
     ;;; test to not overwrite the bootloader
