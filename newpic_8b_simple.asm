@@ -348,6 +348,11 @@ record_not_zero
     return
     
 record_is_extended
+    ;;; is the flash addr 0?, if yes -> don't set the extended_rec_started flag
+    tstfsz flash_addr_hi
+    return
+    tstfsz flash_addr_lo
+    return
     movlw 1
     movwf extended_rec_started
     return
