@@ -3,12 +3,10 @@
 
 radix dec ; decimal values used in code, unless expressed otherwise
 
-max_flash equ 0x7ffe
-end_flash_hi equ (max_flash >> 8)
-end_flash_lo equ (max_flash & 0x00ff) - 2
+max_flash equ 0x8000
 jmp_to_user_code_addr_hi equ 0x0
 jmp_to_user_code_addr_lo equ 0x4 
-btld_code_start equ max_flash - 0x240
+btld_code_start equ max_flash - 0x300
 btld_code_start_hi equ (btld_code_start >> 8)
 btld_code_start_lo equ (btld_code_start & 0x00ff)
 user_prog_start equ 0x4
@@ -227,6 +225,35 @@ continue_erase
     bnc erase_flash
     incf flash_erase_addr_hi ; increase also the high bytes if carry from previous addition
     goto erase_flash
+
+check_btld_overwrite:
+    movf record_type, w
+    btfss STATUS, Z
+    return ; if record_type is not 0, return
+    movf flash_addr_hi, w
+    sublw btld_code_start_hi-1 ; 0x7c - flash_addr_hi
+    bz close_to_btld
+    bn addr_in_btld_zone
+    return ; address range is ok, returing
+close_to_btld
+    ; we are close to bootloader zone, check if overwrite is possible
+    movlw 0xef
+    cpfsgt flash_addr_lo
+    ; if flash_addr_lo < 0xf0, no danger of overwrite
+    ; assuming a maxium 16 bytes of data per record
+    return
+    movlw 1
+    subwf flash_addr_lo, w ; put in W, flash_addr_lo - 1
+    addwf data_bytes_nr, w
+    bc addr_in_btld_zone; btld overwrite, then reset
+    return
+addr_in_btld_zone
+    ; write to UART we have overwrite error and reset
+    movlw 'X'
+    movwf TXREG1
+    btfss TXSTA1, TRMT
+    goto $-2
+    reset
     
 write_flash:
     ;;; start the hw flashing procedure
@@ -381,6 +408,7 @@ receive_and_flash
     lfsr FSR0, recv_line
     call ascii2hex_line
     call extract_write_data
+    call check_btld_overwrite
     call flash_line
     clrf count ; clear count
     lfsr FSR0, recv_line 
