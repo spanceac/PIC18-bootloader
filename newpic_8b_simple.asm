@@ -201,7 +201,7 @@ ck_sum_err
 erase_flash:
     ;;; test to not overwrite the bootloader
     movlw btld_code_start_hi
-    cpfseq flash_erase_addr_hi ; if high part of address is not 0x7d we can continue
+    cpfslt flash_erase_addr_hi ; if high part of address is not 0x7d we can continue
     return ; reached address of bootloader, erase procedure ended
 
 continue_erase
