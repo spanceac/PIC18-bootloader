@@ -11,6 +11,7 @@ btld_code_start_hi equ (btld_code_start >> 8)
 btld_code_start_lo equ (btld_code_start & 0x00ff)
 user_prog_start equ 0x4
 NEW_LINE equ 0x0a
+GOTO_OPCODE equ 0xef
 
 cblock 0x0
 recv_line:50
@@ -287,6 +288,12 @@ flash_line:
     
     ;; if address is zero, we are at start and we need to erase the flash
     ;; save first jump to bootloader instructions before erasing flash
+    ;; and check if the first instruction to write is a goto as it should be
+    lfsr FSR1, fl_write_buf ; point FSR1 to write buffer
+    movlw 1
+    movf PLUSW1, w ; read the second byte of write buffer
+    sublw GOTO_OPCODE ; test if goto
+    bnz first_inst_not_goto
     lfsr FSR2, first_jmp_inst_buf
     clrf TBLPTRU
     clrf TBLPTRL
@@ -372,7 +379,7 @@ record_not_zero
     bnz record_is_extended
     bsf data_ended, 0
     return
-    
+
 record_is_extended
     ;;; is the flash addr 0?, if yes -> don't set the extended_rec_started flag
     tstfsz flash_addr_hi
@@ -382,6 +389,14 @@ record_is_extended
     movlw 1
     movwf extended_rec_started
     return
+
+first_inst_not_goto
+    ; write to UART, error that first instruction is not goto and reset
+    movlw 'G'
+    movwf TXREG1
+    btfss TXSTA1, TRMT
+    goto $-2
+    reset
 
 StartBtld
     movlw 0x70
