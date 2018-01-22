@@ -294,12 +294,12 @@ flash_line:
     movlw 4
     movwf count2
     
-repeat_read    
+read_first_inst
     TBLRD*+
     movf TABLAT, w
     movwf POSTINC2
     decfsz count2
-    goto repeat_read
+    goto read_first_inst
     
     call erase_flash ; erase the flash
     
@@ -337,7 +337,6 @@ flash_wr_buf
     andwf flash_addr_zone, f
 
 fill_holding_regs    
-    ;;; here comes the real flashing part ... YAAAY!!!
     movf POSTINC1, w ; put byte from write buffer in w and increment buffer addr
     movwf TABLAT ; put data in write latch
     TBLWT*+ ; put data in holding register and increment the table
