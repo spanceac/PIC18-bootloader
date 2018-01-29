@@ -273,12 +273,6 @@ flash_line:
     tstfsz record_type
     bra record_not_zero
     
-    ;;; is the addr 0?, if not -> continue flashing, no need for erase or address change
-    tstfsz flash_addr_hi
-    bra flash_wr_buf
-    tstfsz flash_addr_lo
-    bra flash_wr_buf
-    
     ;; let's see if this could be part of an extended record
     ;; we don't flash extended records
     movf extended_rec_started, w
@@ -286,6 +280,12 @@ flash_line:
     btfsc STATUS, Z
     return ;; if this is a part of an extended record, return
     
+    ;;; is the addr 0?, if not -> continue flashing, no need for erase or address change
+    tstfsz flash_addr_hi
+    bra flash_wr_buf
+    tstfsz flash_addr_lo
+    bra flash_wr_buf
+
     ;; if address is zero, we are at start and we need to erase the flash
     ;; save first jump to bootloader instructions before erasing flash
     ;; and check if the first instruction to write is a goto as it should be
@@ -381,11 +381,14 @@ record_not_zero
     return
 
 record_is_extended
-    ;;; is the flash addr 0?, if yes -> don't set the extended_rec_started flag
-    tstfsz flash_addr_hi
-    return
-    tstfsz flash_addr_lo
-    return
+    ; are the 2 data fields of the ext record 0? -> don't set the extended_rec_started flag
+    lfsr FSR1, fl_write_buf ; point FSR1 to write buffer
+    tstfsz POSTINC1 ; first byte of the extended record
+    bra set_ext_rec_flag
+    tstfsz POSTINC1 ; second byte of the extended record
+    bra set_ext_rec_flag
+    return ; the two bytes of data are zero, so we don't set the extended record flag
+set_ext_rec_flag
     movlw 1
     movwf extended_rec_started
     return
