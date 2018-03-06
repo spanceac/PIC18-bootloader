@@ -97,7 +97,7 @@ normal_flow
     goto receive_line
 
 exit_flow
-    ;call xoff ; stop receive, time to flash
+    call xoff ; stop receive
     return
 
 ascii2hex_line:
