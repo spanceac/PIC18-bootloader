@@ -238,7 +238,7 @@ If all was succesfull, the python program will exit with the following message:
 "Finnished sending hex"
 
 When I started writing the bootloader, I wanted to be able to interact with the bootloader using standard linux command line tools.
-For this purpose the bootloader can be used with the linux ascii-xfr tool, if you activate software flow control(XON/XOFF) for your PC's UART.
+For this purpose the bootloader can be used with the linux ascii-xfr tool (part of minicom package), if you activate software flow control(XON/XOFF) for your PC's UART.
 
 When the PIC receives a line and needs to flash it, will notify the computer to stop sending data with a XOFF command(13h). After the line is flashed it will send a XON command(0x11) to notify the computer that it can receive data again
 
@@ -246,9 +246,15 @@ To set the UART port baud rate to 115200 and software flow control use:
 **sudo stty -F /dev/ttyUSB0 115200 ixoff**
 
 To send the hex to the bootloader use:
-**sudo ascii-xfr -sv -l 100 hex_file > /dev/ttyUSB0**
+**sudo sh -c "ascii-xfr -sv -l 1 hex_file > /dev/ttyUSB0"**
 
-The parameter "-l 100" in ascii-xfr command adds a 100ms delay after sending each line to the PIC. This delay is mandatory for PIC to have time to reply with the XOFF character when the end of line character is received. If this delay is missing, then a UART overrun will happen in the PIC and all communication will be broken.
+The parameter "-l 1" in ascii-xfr command adds a 1ms delay after sending each line to the PIC. This delay is mandatory for PIC to have time to reply with the XOFF character when the end of line character is received. If this delay is missing, then a UART overrun will happen in the PIC and all communication will be broken.
+
+**Update**
+
+It seems that ascii-xfr tool (v2.7) is not working as intended. I observed that instead of outputting a single line and then delay, the bytes from two consecutive lines get concatenated, with no delay between them. This breaks the synchronization. The cause is the computer buffering the UART bytes and sending them when it wants. The ascii-xfr code is written correctly: output a line, then delay. But it's missing calling the function "tcdrain" after sending each line. The "tcdrain" function makes the computer flush the UART buffer.
+
+I patched the code for ascii-xfr to flush the UART buffer after sending each line, and everything works as intended. I sent an e-mail to minicom mailing list with the patch. Let's see if this will be considered by the maintainers and fixed in future versions.
 
 # Porting bootloader code
 
