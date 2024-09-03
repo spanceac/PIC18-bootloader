@@ -234,7 +234,10 @@ check_btld_overwrite:
     movf flash_addr_hi, w
     sublw btld_code_start_hi-1 ; 0x7c - flash_addr_hi
     bz close_to_btld
-    bn addr_in_btld_zone
+    ; CARRY flag is interpreted as /BORROW for substract instructions
+    ; flash_addr_hi > (btld_code_start_hi - 1) -> N = 1, C = 0 -> btld overwrite
+    ; flash_addr_hi < (btld_code_start_hi - 1) -> N = X, C = 1 -> no overwrite
+    bnc addr_in_btld_zone
     return ; address range is ok, returing
 close_to_btld
     ; we are close to bootloader zone, check if overwrite is possible
